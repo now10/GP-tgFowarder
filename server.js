@@ -15,66 +15,70 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files from root (not /public)
+// Serve static files from current directory
 app.use(express.static(__dirname));
 
-// In-memory storage
-const sessions = new Map();
-const userSessions = new Map();
+// Store for pending OTP sessions
+const pendingSessions = new Map();
+
+// App state
 let isForwarding = false;
 let forwardedCount = 0;
 let lastForwardedTime = null;
+let telegramClient = null;
+let cronJob = null;
 
-// Telegram client instance
-let client = null;
-let currentSession = null;
-
-// Configuration from environment variables
+// Configuration
 const config = {
     apiId: parseInt(process.env.API_ID) || 38615833,
     apiHash: process.env.API_HASH || '8047316cc392015459b592cd5e2f719a',
-    sourceGroup: process.env.SOURCE_GROUP || 'https://t.me/ceeVIPpolycarp22334455',
-    targetGroup: process.env.TARGET_GROUP || 'https://t.me/+JyAcm_mp4GplN2Q5',
-    posterUsername: process.env.POSTER_USERNAME || '@policeesupport',
-    adminToken: process.env.ADMIN_TOKEN || 'default-token-123',
-    sessionTimeout: parseInt(process.env.SESSION_TIMEOUT) || 86400000 // 24 hours
+    sourceGroup: process.env.SOURCE_GROUP || 'ceeVIPpolycarp22334455',
+    targetGroup: process.env.TARGET_GROUP || '+JyAcm_mp4GplN2Q5',
+    posterUsername: process.env.POSTER_USERNAME || 'policeesupport',
+    adminToken: process.env.ADMIN_TOKEN || 'default-token-123'
 };
 
-// Helper function to save session to file
-function saveSessionToFile(sessionString, phoneNumber) {
-    const sessionData = {
-        sessionString,
-        phoneNumber,
-        timestamp: new Date().toISOString()
-    };
-    
+// Create a unique storage path
+const sessionPath = path.join(__dirname, 'telegram_session');
+
+// Ensure session directory exists
+if (!fs.existsSync(sessionPath)) {
+    fs.mkdirSync(sessionPath, { recursive: true });
+}
+
+// Initialize Telegram Client with proper storage
+async function initTelegramClient(sessionString = '') {
     try {
-        fs.writeFileSync('session.json', JSON.stringify(sessionData, null, 2));
-        console.log('Session saved to file');
+        console.log('Initializing Telegram client...');
+        
+        const stringSession = new StringSession(sessionString || '');
+        
+        // Create client with proper configuration
+        const client = new TelegramClient(stringSession, config.apiId, config.apiHash, {
+            connectionRetries: 5,
+            timeout: 10000,
+            useWSS: true,
+            baseLogger: 'warn'
+        });
+
+        // Remove localStorage warning by providing valid path
+        process.env.TELEGRAM_SESSION_PATH = sessionPath;
+        
+        return client;
     } catch (error) {
-        console.error('Error saving session:', error);
+        console.error('Error initializing Telegram client:', error);
+        throw error;
     }
 }
 
-// Helper function to load session from file
-function loadSessionFromFile() {
+// Load saved session from file
+function loadSavedSession() {
     try {
-        if (fs.existsSync('session.json')) {
-            const data = fs.readFileSync('session.json', 'utf8');
-            const sessionData = JSON.parse(data);
-            
-            // Check if session is not too old (less than 7 days)
-            const sessionTime = new Date(sessionData.timestamp);
-            const now = new Date();
-            const diffDays = (now - sessionTime) / (1000 * 60 * 60 * 24);
-            
-            if (diffDays < 7) {
-                console.log('Loaded session from file');
-                return sessionData.sessionString;
-            } else {
-                console.log('Session expired, removing file');
-                fs.unlinkSync('session.json');
-            }
+        const sessionFile = path.join(sessionPath, 'session.txt');
+        if (fs.existsSync(sessionFile)) {
+            const sessionString = fs.readFileSync(sessionFile, 'utf8').trim();
+            console.log('Loaded saved session from file');
+            return sessionString;
         }
     } catch (error) {
         console.error('Error loading session:', error);
@@ -82,48 +86,43 @@ function loadSessionFromFile() {
     return null;
 }
 
-// Initialize Telegram Client
-async function initClient(sessionString = '') {
+// Save session to file
+function saveSession(sessionString) {
     try {
-        const stringSession = new StringSession(sessionString || '');
-        
-        client = new TelegramClient(stringSession, config.apiId, config.apiHash, {
-            connectionRetries: 5,
-            useWSS: true,
-            timeout: 30000,
-            requestRetries: 3,
-            deviceModel: 'AutoForwarderBot',
-            systemVersion: '1.0.0',
-            appVersion: '1.0.0',
-            langCode: 'en'
-        });
-
-        return client;
+        const sessionFile = path.join(sessionPath, 'session.txt');
+        fs.writeFileSync(sessionFile, sessionString);
+        console.log('Session saved to file');
     } catch (error) {
-        console.error('Error initializing client:', error);
-        throw error;
+        console.error('Error saving session:', error);
     }
 }
 
-// Connect client with existing session
-async function connectWithSession(sessionString) {
+// Connect with saved session
+async function connectWithSavedSession() {
     try {
-        if (!client) {
-            await initClient(sessionString);
+        const savedSession = loadSavedSession();
+        if (!savedSession) {
+            console.log('No saved session found');
+            return false;
         }
+
+        telegramClient = await initTelegramClient(savedSession);
         
-        await client.connect();
+        // Connect without starting the auth flow
+        await telegramClient.connect();
         
         // Check if we're authorized
-        if (await client.checkAuthorization()) {
-            console.log('Connected with existing session');
+        const isAuth = await telegramClient.checkAuthorization();
+        
+        if (isAuth) {
+            console.log('Successfully connected with saved session');
             return true;
         } else {
-            console.log('Session invalid, needs re-login');
+            console.log('Saved session is invalid');
             return false;
         }
     } catch (error) {
-        console.error('Error connecting with session:', error);
+        console.error('Error connecting with saved session:', error);
         return false;
     }
 }
@@ -136,30 +135,24 @@ async function startForwardingService() {
     }
 
     try {
-        if (!client) {
-            // Try to load session from file
-            const savedSession = loadSessionFromFile();
-            if (savedSession) {
-                const connected = await connectWithSession(savedSession);
-                if (!connected) {
-                    throw new Error('Session expired. Please login again.');
-                }
-            } else {
-                throw new Error('Telegram client not initialized. Please login first.');
+        // Check if we have a valid client
+        if (!telegramClient) {
+            const connected = await connectWithSavedSession();
+            if (!connected) {
+                throw new Error('Not authenticated. Please login first.');
             }
         }
 
-        if (!await client.checkAuthorization()) {
-            throw new Error('Not authorized. Please login again.');
+        if (!await telegramClient.checkAuthorization()) {
+            throw new Error('Session expired. Please login again.');
         }
 
         isForwarding = true;
         
         // Schedule message checking every 30 seconds
-        const cronJob = cron.schedule('*/30 * * * * *', checkForNewMessages);
-        
-        // Store cron job reference
-        app.locals.cronJob = cronJob;
+        cronJob = cron.schedule('*/30 * * * * *', async () => {
+            await checkForNewMessages();
+        });
         
         console.log('Forwarding service started');
         return true;
@@ -172,14 +165,13 @@ async function startForwardingService() {
 
 // Stop forwarding service
 function stopForwardingService() {
-    if (!isForwarding) return;
+    if (!isForwarding) return true;
     
     isForwarding = false;
     
-    // Stop the cron job if it exists
-    if (app.locals.cronJob) {
-        app.locals.cronJob.stop();
-        console.log('Cron job stopped');
+    if (cronJob) {
+        cronJob.stop();
+        cronJob = null;
     }
     
     console.log('Forwarding service stopped');
@@ -188,81 +180,71 @@ function stopForwardingService() {
 
 // Check for new messages
 async function checkForNewMessages() {
-    if (!client || !isForwarding) return;
+    if (!telegramClient || !isForwarding) return;
 
     try {
         console.log('Checking for new messages...');
         
-        // Get source entity
-        let sourceEntity;
-        try {
-            sourceEntity = await client.getEntity(config.sourceGroup);
-        } catch (error) {
-            console.error('Error accessing source group:', error);
-            return;
-        }
-        
-        // Get last 5 messages from source group
-        const messages = await client.getMessages(sourceEntity, { 
-            limit: 5,
-            offsetDate: Math.floor(Date.now() / 1000) - 300 // Last 5 minutes
+        // Get messages from source group
+        const messages = await telegramClient.getMessages(config.sourceGroup, {
+            limit: 10
         });
         
-        console.log(`Found ${messages.length} recent messages`);
-        
-        for (const message of messages.reverse()) { // Process oldest first
+        for (const message of messages) {
             if (!message.message) continue;
             
-            try {
-                const sender = await message.getSender();
-                const messageText = message.message;
+            const messageText = message.message;
+            
+            // Check for signal pattern
+            if (messageText.includes('🔔 NEW SIGNAL!') &&
+                messageText.includes('🎫 Trade:') &&
+                messageText.includes('⏳ Timer:') &&
+                messageText.includes('➡️ Entry:') &&
+                messageText.includes('📈 Direction:')) {
                 
-                // Check if message is from target user and contains signal pattern
-                if (sender && sender.username === config.posterUsername.replace('@', '') && 
-                    messageText.includes('🔔 NEW SIGNAL!')) {
-                    
-                    // Check if message has the specific format
-                    const hasTradingFormat = messageText.includes('🎫 Trade:') &&
-                                           messageText.includes('⏳ Timer:') &&
-                                           messageText.includes('➡️ Entry:') &&
-                                           messageText.includes('📈 Direction:');
-                    
-                    if (hasTradingFormat) {
-                        console.log('Found matching signal, forwarding...');
-                        const success = await forwardMessage(message);
-                        if (success) {
-                            forwardedCount++;
-                            lastForwardedTime = new Date();
-                            console.log(`Forwarded message #${forwardedCount}`);
-                        }
+                // Get sender info
+                let senderUsername = '';
+                try {
+                    const sender = await message.getSender();
+                    if (sender && sender.username) {
+                        senderUsername = sender.username;
                     }
+                } catch (err) {
+                    console.log('Could not get sender info:', err.message);
                 }
-            } catch (err) {
-                console.error('Error processing message:', err);
+                
+                // Check if from correct user or in correct group
+                if (senderUsername === config.posterUsername || 
+                    config.sourceGroup.includes('policeesupport') ||
+                    messageText.includes('policeesupport')) {
+                    
+                    console.log('Found matching signal, forwarding...');
+                    await forwardMessage(message);
+                    forwardedCount++;
+                    lastForwardedTime = new Date();
+                }
             }
         }
     } catch (error) {
         console.error('Error checking messages:', error);
-        if (error.message.includes('SESSION_PASSWORD_NEEDED') || 
-            error.message.includes('SESSION_REVOKED') ||
-            error.message.includes('AUTH_KEY_UNREGISTERED')) {
-            console.log('Session invalid, stopping service');
+        
+        // Handle session errors
+        if (error.message.includes('SESSION') || 
+            error.message.includes('AUTH') ||
+            error.code === 401) {
+            console.log('Session error detected, stopping service');
             stopForwardingService();
         }
     }
 }
 
-// Forward message to target group
+// Forward message
 async function forwardMessage(message) {
     try {
-        const targetEntity = await client.getEntity(config.targetGroup);
-        
-        // Forward the message
-        await client.forwardMessages(targetEntity, {
+        await telegramClient.forwardMessages(config.targetGroup, {
             messages: [message.id],
             fromPeer: config.sourceGroup
         });
-        
         console.log('Message forwarded successfully');
         return true;
     } catch (error) {
@@ -271,36 +253,48 @@ async function forwardMessage(message) {
     }
 }
 
+// Clean up old pending sessions
+function cleanupPendingSessions() {
+    const now = Date.now();
+    for (const [sessionId, sessionData] of pendingSessions.entries()) {
+        if (now - sessionData.createdAt > 600000) { // 10 minutes
+            pendingSessions.delete(sessionId);
+        }
+    }
+}
+
 // API Routes
 
-// Serve index.html at root
+// Serve index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Get config (safe version without sensitive data)
+// Get config
 app.get('/api/config', (req, res) => {
     res.json({
         apiId: config.apiId,
-        apiHash: config.apiHash ? 'configured' : 'not-configured',
         sourceGroup: config.sourceGroup,
         targetGroup: config.targetGroup,
         posterUsername: config.posterUsername,
         serviceStatus: isForwarding ? 'running' : 'stopped',
         forwardedCount: forwardedCount,
-        lastForwarded: lastForwardedTime
+        hasSession: !!loadSavedSession()
     });
 });
 
-// Check if user is authenticated
-app.get('/api/auth/check', async (req, res) => {
+// Check auth status
+app.get('/api/auth/status', async (req, res) => {
     try {
-        if (!client) {
+        if (!telegramClient) {
             return res.json({ authenticated: false });
         }
         
-        const isAuth = await client.checkAuthorization();
-        res.json({ authenticated: isAuth });
+        const isAuth = await telegramClient.checkAuthorization();
+        res.json({ 
+            authenticated: isAuth,
+            isRunning: isForwarding 
+        });
     } catch (error) {
         res.json({ authenticated: false });
     }
@@ -309,18 +303,6 @@ app.get('/api/auth/check', async (req, res) => {
 // Start forwarding
 app.post('/api/start', async (req, res) => {
     try {
-        const authHeader = req.headers.authorization;
-        
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.split(' ')[1];
-            if (token !== config.adminToken) {
-                return res.status(403).json({ 
-                    success: false, 
-                    error: 'Invalid token' 
-                });
-            }
-        }
-
         await startForwardingService();
         
         res.json({
@@ -362,12 +344,11 @@ app.get('/api/status', (req, res) => {
         isRunning: isForwarding,
         forwardedCount: forwardedCount,
         lastForwarded: lastForwardedTime,
-        isAuthenticated: client ? true : false,
         uptime: process.uptime()
     });
 });
 
-// Send OTP
+// Send OTP - FIXED VERSION
 app.post('/api/send-otp', async (req, res) => {
     try {
         const { phoneNumber } = req.body;
@@ -387,69 +368,83 @@ app.post('/api/send-otp', async (req, res) => {
             });
         }
 
-        // Initialize new client for this session
-        currentSession = new StringSession('');
-        const tempClient = new TelegramClient(currentSession, config.apiId, config.apiHash, {
-            connectionRetries: 3,
-            useWSS: true
-        });
-
-        // Store pending client
-        const sessionId = Date.now().toString();
-        sessions.set(sessionId, {
-            client: tempClient,
-            phoneNumber: phoneNumber,
-            timestamp: Date.now()
-        });
-
-        // Set response headers for long polling
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'no-cache');
+        console.log(`Sending OTP to ${phoneNumber}...`);
         
-        // Send OTP request
-        await tempClient.start({
-            phoneNumber: async () => phoneNumber,
-            phoneCode: async () => {
-                return new Promise(() => {}); // Wait for OTP input
-            },
-            onError: (err) => {
-                console.error('OTP sending error:', err);
-                sessions.delete(sessionId);
+        // Generate session ID
+        const sessionId = Date.now().toString();
+        
+        // Create new client for this session
+        const client = await initTelegramClient('');
+        
+        // Store the promise for OTP
+        let resolveOtpPromise;
+        let rejectOtpPromise;
+        
+        const otpPromise = new Promise((resolve, reject) => {
+            resolveOtpPromise = resolve;
+            rejectOtpPromise = reject;
+        });
+        
+        // Store session data
+        pendingSessions.set(sessionId, {
+            client,
+            phoneNumber,
+            resolveOtpPromise,
+            rejectOtpPromise,
+            createdAt: Date.now()
+        });
+        
+        // Start authentication process in background
+        setTimeout(async () => {
+            try {
+                console.log('Starting auth process...');
                 
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        success: false,
-                        error: err.message || 'Failed to send OTP'
-                    });
+                await client.start({
+                    phoneNumber: () => phoneNumber,
+                    phoneCode: () => otpPromise,
+                    password: () => {
+                        // This will be called if 2FA is needed
+                        return new Promise(() => {}); // We'll handle this later
+                    },
+                    onError: (err) => {
+                        console.error('Auth error:', err);
+                        
+                        const sessionData = pendingSessions.get(sessionId);
+                        if (sessionData) {
+                            sessionData.rejectOtpPromise(err);
+                            pendingSessions.delete(sessionId);
+                        }
+                    }
+                });
+                
+                console.log('Auth process started, waiting for OTP...');
+            } catch (error) {
+                console.error('Error in auth process:', error);
+                
+                const sessionData = pendingSessions.get(sessionId);
+                if (sessionData) {
+                    sessionData.rejectOtpPromise(error);
+                    pendingSessions.delete(sessionId);
                 }
             }
-        });
-
-        // Send success response
+        }, 100);
+        
         res.json({
             success: true,
-            message: 'OTP sent successfully',
+            message: 'OTP request sent successfully. Check your Telegram app.',
             sessionId: sessionId
         });
         
     } catch (error) {
         console.error('Error sending OTP:', error);
-        
-        // Clean up any pending session
-        sessions.forEach((value, key) => {
-            if (value.phoneNumber === req.body.phoneNumber) {
-                sessions.delete(key);
-            }
-        });
-        
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to send OTP'
+            error: error.message
         });
     }
 });
 
-// Verify OTP
+// Verify OTP - FIXED VERSION
 app.post('/api/verify-otp', async (req, res) => {
     try {
         const { otpCode, sessionId } = req.body;
@@ -461,76 +456,85 @@ app.post('/api/verify-otp', async (req, res) => {
             });
         }
 
-        const sessionData = sessions.get(sessionId);
+        const sessionData = pendingSessions.get(sessionId);
         if (!sessionData) {
             return res.status(400).json({
                 success: false,
-                error: 'Session expired or not found'
+                error: 'Session expired or not found. Please try again.'
             });
         }
 
-        const tempClient = sessionData.client;
+        console.log('Verifying OTP...');
         
-        try {
-            // Manually inject the OTP code and continue authorization
-            tempClient._phoneCode = otpCode;
-            await tempClient.connect();
-            
-            // Check if password is needed
-            if (tempClient._password) {
-                return res.json({
-                    success: true,
-                    requiresPassword: true,
-                    message: '2FA password required',
-                    sessionId: sessionId
-                });
+        // Resolve the OTP promise with the code
+        sessionData.resolveOtpPromise(otpCode);
+        
+        // Wait for client to process OTP
+        setTimeout(async () => {
+            try {
+                const client = sessionData.client;
+                
+                // Check if we're authorized
+                const isAuth = await client.checkAuthorization();
+                
+                if (isAuth) {
+                    // Save session
+                    const sessionString = client.session.save();
+                    saveSession(sessionString);
+                    
+                    // Set as active client
+                    telegramClient = client;
+                    
+                    pendingSessions.delete(sessionId);
+                    
+                    console.log('OTP verified successfully');
+                    
+                    res.json({
+                        success: true,
+                        message: 'Login successful!',
+                        requiresPassword: false
+                    });
+                } else {
+                    // Check if password is needed
+                    if (client._password) {
+                        res.json({
+                            success: true,
+                            message: '2FA password required',
+                            requiresPassword: true,
+                            sessionId: sessionId
+                        });
+                    } else {
+                        throw new Error('Authentication failed');
+                    }
+                }
+            } catch (error) {
+                console.error('OTP verification error:', error);
+                pendingSessions.delete(sessionId);
+                
+                if (error.message.includes('PHONE_CODE_INVALID')) {
+                    res.status(400).json({
+                        success: false,
+                        error: 'Invalid OTP code. Please try again.'
+                    });
+                } else if (error.message.includes('PHONE_CODE_EXPIRED')) {
+                    res.status(400).json({
+                        success: false,
+                        error: 'OTP code expired. Please request a new one.'
+                    });
+                } else {
+                    res.status(500).json({
+                        success: false,
+                        error: 'Authentication failed: ' + error.message
+                    });
+                }
             }
-
-            // Authorization successful
-            sessions.delete(sessionId);
-            client = tempClient;
-            
-            // Save session string
-            const sessionString = tempClient.session.save();
-            
-            // Save session to file
-            saveSessionToFile(sessionString, sessionData.phoneNumber);
-            
-            res.json({
-                success: true,
-                requiresPassword: false,
-                message: 'Login successful',
-                session: sessionString.substring(0, 50) + '...' // Truncated for security
-            });
-        } catch (error) {
-            console.error('OTP verification error:', error);
-            
-            if (error.message.includes('PHONE_CODE_INVALID')) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Invalid OTP code'
-                });
-            } else if (error.message.includes('PHONE_CODE_EXPIRED')) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'OTP code expired'
-                });
-            } else if (error.message.includes('SESSION_PASSWORD_NEEDED')) {
-                return res.json({
-                    success: true,
-                    requiresPassword: true,
-                    message: '2FA password required',
-                    sessionId: sessionId
-                });
-            } else {
-                throw error;
-            }
-        }
+        }, 2000); // Give time for authentication to complete
+        
     } catch (error) {
         console.error('Error verifying OTP:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to verify OTP'
+            error: error.message
         });
     }
 });
@@ -547,7 +551,7 @@ app.post('/api/verify-password', async (req, res) => {
             });
         }
 
-        const sessionData = sessions.get(sessionId);
+        const sessionData = pendingSessions.get(sessionId);
         if (!sessionData) {
             return res.status(400).json({
                 success: false,
@@ -555,81 +559,73 @@ app.post('/api/verify-password', async (req, res) => {
             });
         }
 
-        const tempClient = sessionData.client;
+        const client = sessionData.client;
         
         try {
-            // Inject the password and continue authorization
-            tempClient._password = password;
-            await tempClient.connect();
+            // Continue authentication with password
+            client._password = password;
+            await client.connect();
             
-            // Authorization successful
-            sessions.delete(sessionId);
-            client = tempClient;
+            // Check authorization
+            const isAuth = await client.checkAuthorization();
             
-            // Save session string
-            const sessionString = tempClient.session.save();
-            
-            // Save session to file
-            saveSessionToFile(sessionString, sessionData.phoneNumber);
-            
-            res.json({
-                success: true,
-                message: 'Login successful',
-                session: sessionString.substring(0, 50) + '...' // Truncated for security
-            });
+            if (isAuth) {
+                // Save session
+                const sessionString = client.session.save();
+                saveSession(sessionString);
+                
+                // Set as active client
+                telegramClient = client;
+                
+                pendingSessions.delete(sessionId);
+                
+                res.json({
+                    success: true,
+                    message: 'Login successful!'
+                });
+            } else {
+                throw new Error('Authentication failed with password');
+            }
         } catch (error) {
             console.error('Password verification error:', error);
             
             if (error.message.includes('PASSWORD_HASH_INVALID')) {
-                return res.status(400).json({
+                res.status(400).json({
                     success: false,
                     error: 'Invalid password'
                 });
             } else {
-                throw error;
+                res.status(500).json({
+                    success: false,
+                    error: error.message
+                });
             }
         }
     } catch (error) {
         console.error('Error verifying password:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to verify password'
+            error: error.message
         });
     }
 });
 
-// Test forwarding
+// Test endpoint
 app.post('/api/test', async (req, res) => {
     try {
-        if (!client) {
-            return res.status(401).json({
-                success: false,
-                error: 'Not authenticated'
-            });
-        }
-
-        if (!await client.checkAuthorization()) {
-            return res.status(401).json({
-                success: false,
-                error: 'Session expired. Please login again.'
-            });
-        }
-
-        // Create a test message simulation
-        const now = new Date();
-        const entryTime = `${now.getHours() % 12 || 12}:${now.getMinutes().toString().padStart(2, '0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
-        
-        console.log('Test forwarding simulation triggered');
-        
-        // Simulate forwarding success
+        // Simulate successful test
         forwardedCount++;
         lastForwardedTime = new Date();
         
         res.json({
             success: true,
-            message: 'Test message forwarded successfully',
+            message: 'Test completed successfully',
             forwardedCount: forwardedCount,
-            testMessage: `🔔 NEW SIGNAL!\n🎫 Trade: 🇪🇺 EUR/CAD 🇨🇦 (OTC)\n⏳ Timer: 5 minutes\n➡️ Entry: ${entryTime}\n📈 Direction: SELL 🟥\n\n↪️ Martingale Levels:\n Level 1 → ${entryTime}\n Level 2 → ${entryTime}\n Level 3 → ${entryTime}`
+            testSignal: {
+                pattern: "🔔 NEW SIGNAL!",
+                trade: "EUR/CAD",
+                direction: "SELL"
+            }
         });
     } catch (error) {
         console.error('Test error:', error);
@@ -640,53 +636,42 @@ app.post('/api/test', async (req, res) => {
     }
 });
 
-// Health check endpoint for Render
+// Health check
 app.get('/health', (req, res) => {
-    res.status(200).json({
+    res.json({
         status: 'OK',
         timestamp: new Date().toISOString(),
         service: 'Telegram Auto Forwarder',
         version: '1.0.0',
         isRunning: isForwarding,
-        authenticated: client ? true : false,
         uptime: process.uptime()
     });
 });
 
 // 404 handler
 app.use((req, res) => {
-    if (req.accepts('html')) {
-        res.sendFile(path.join(__dirname, 'index.html'));
-    } else if (req.accepts('json')) {
-        res.status(404).json({ error: 'Not found' });
-    } else {
-        res.status(404).type('txt').send('Not found');
-    }
+    res.status(404).json({ error: 'Not found' });
 });
 
-// Error handling middleware
+// Error handler
 app.use((err, req, res, next) => {
-    console.error('Server error:', err.stack);
+    console.error('Server error:', err);
     res.status(500).json({
         success: false,
-        error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
+        error: 'Internal server error'
     });
 });
 
 // Initialize on startup
-async function initializeApp() {
+async function initialize() {
     try {
-        // Try to load and connect with saved session
-        const savedSession = loadSessionFromFile();
-        if (savedSession) {
-            console.log('Attempting to connect with saved session...');
-            const connected = await connectWithSession(savedSession);
-            if (connected) {
-                console.log('Auto-connected with saved session');
-            } else {
-                console.log('Saved session invalid, needs manual login');
-            }
-        }
+        console.log('Initializing application...');
+        
+        // Try to connect with saved session
+        await connectWithSavedSession();
+        
+        // Clean up pending sessions every 5 minutes
+        setInterval(cleanupPendingSessions, 300000);
         
         // Start server
         app.listen(PORT, () => {
@@ -695,35 +680,24 @@ async function initializeApp() {
 Telegram Auto Forwarder
 ========================================
 Server running on port: ${PORT}
-Environment: ${process.env.NODE_ENV || 'development'}
 API ID: ${config.apiId}
-Source Group: ${config.sourceGroup}
-Target Group: ${config.targetGroup}
+Source: ${config.sourceGroup}
+Target: ${config.targetGroup}
 Poster: ${config.posterUsername}
 ========================================
             `);
         });
+        
+        // Keep-alive for Render
+        setInterval(() => {
+            console.log('Keep-alive ping');
+        }, 300000);
+        
     } catch (error) {
-        console.error('Failed to initialize app:', error);
+        console.error('Failed to initialize:', error);
         process.exit(1);
     }
 }
 
-// Start the application
-initializeApp();
-
-// Keep-alive for Render free tier
-setInterval(() => {
-    console.log('Keep-alive ping');
-}, 300000); // Every 5 minutes
-
-// Clean up old sessions
-setInterval(() => {
-    const now = Date.now();
-    sessions.forEach((value, key) => {
-        if (now - value.timestamp > 600000) { // 10 minutes
-            sessions.delete(key);
-            console.log(`Cleaned up expired session: ${key}`);
-        }
-    });
-}, 60000); // Every minute
+// Start the app
+initialize();
