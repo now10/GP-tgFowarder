@@ -2,7 +2,9 @@ services:
   - type: web
     name: telegram-auto-forwarder
     env: node
-    buildCommand: npm install
+    buildCommand: |
+      npm install
+      mkdir -p telegram_session
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -14,14 +16,10 @@ services:
       - key: API_HASH
         sync: false
       - key: SOURCE_GROUP
-        value: https://t.me/ceeVIPpolycarp22334455
+        value: ceeVIPpolycarp22334455
       - key: TARGET_GROUP
-        value: https://t.me/+JyAcm_mp4GplN2Q5
+        value: +JyAcm_mp4GplN2Q5
       - key: POSTER_USERNAME
-        value: "@policeesupport"
-      - key: ADMIN_PASSWORD
-        generateValue: true
+        value: policeesupport
       - key: ADMIN_TOKEN
         generateValue: true
-      - key: SESSION_TIMEOUT
-        value: "86400000"
