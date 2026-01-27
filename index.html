@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Auto Forwarder - Render</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 900px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .header .render-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+            margin-top: 15px;
+            font-weight: 500;
+        }
+
+        .header .render-badge i {
+            margin-right: 8px;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .section:hover {
+            transform: translateY(-2px);
+            transition: transform 0.3s ease;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+        }
+
+        .section h3 {
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .section h3 i {
+            color: #667eea;
+            font-size: 22px;
+        }
+
+        .section p {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .section strong {
+            color: #333;
+            font-weight: 600;
+        }
+
+        .status-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 25px;
+            margin-top: 30px;
+            margin-bottom: 30px;
+        }
+
+        .status-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            text-align: center;
+            border-top: 4px solid;
+            transition: all 0.3s ease;
+        }
+
+        .status-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.12);
+        }
+
+        .status-card.online {
+            border-color: #4CAF50;
+            background: linear-gradient(135deg, #f8fff8 0%, #ffffff 100%);
+        }
+
+        .status-card.offline {
+            border-color: #f44336;
+            background: linear-gradient(135deg, #fff8f8 0%, #ffffff 100%);
+        }
+
+        .status-card h4 {
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .online .status-indicator {
+            background: #4CAF50;
+            box-shadow: 0 0 10px #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        .offline .status-indicator {
+            background: #f44336;
+            box-shadow: 0 0 10px #f44336;
+        }
+
+        .status-card p {
+            font-size: 24px;
+            font-weight: 700;
+            color: #333;
+            margin: 0;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 180px;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+        }
+
+        .btn-stop:hover {
+            box-shadow: 0 10px 25px rgba(244, 67, 54, 0.4);
+        }
+
+        .btn-test {
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+        }
+
+        .btn-test:hover {
+            box-shadow: 0 10px 25px rgba(255, 152, 0, 0.4);
+        }
+
+        .controls {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .log-section {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.5;
+            border: 1px solid #333;
+        }
+
+        .log-section::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .log-section::-webkit-scrollbar-track {
+            background: #2a2a2a;
+            border-radius: 4px;
+        }
+
+        .log-section::-webkit-scrollbar-thumb {
+            background: #00ff00;
+            border-radius: 4px;
+        }
+
+        .log-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+            display: flex;
+            gap: 10px;
+        }
+
+        .log-time {
+            color: #888;
+            min-width: 90px;
+            font-weight: 500;
+        }
+
+        .log-message {
+            color: #00ff00;
+            flex: 1;
+        }
+
+        .log-error {
+            color: #ff4444;
+        }
+
+        .log-success {
+            color: #44ff44;
+        }
+
+        .log-warning {
+            color: #ffcc00;
+        }
+
+        @keyframes pulse {
+            0% { 
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+            }
+            70% { 
+                opacity: 0.8;
+                box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+            }
+            100% { 
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+            }
+        }
+
+        .api-info {
+            background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+            border: 2px solid #ffeaa7;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 25px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .api-info::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 5px;
+            height: 100%;
+            background: #ffc107;
+        }
+
+        .api-info h4 {
+            color: #856404;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+        }
+
+        .api-info p {
+            color: #856404;
+            margin-bottom: 8px;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .api-info span {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            background: rgba(133, 100, 4, 0.1);
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+
+        .signal-preview {
+            background: #e9ecef;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.8;
+            color: #333;
+            border: 1px solid #dee2e6;
+            white-space: pre-wrap;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .signal-preview::before {
+            content: '📋 SIGNAL FORMAT';
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            border-bottom-left-radius: 5px;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            position: relative;
+            animation: slideIn 0.4s ease;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #999;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+        .modal-step {
+            display: none;
+        }
+
+        .modal-step.active {
+            display: block;
+        }
+
+        .modal-step h3 {
+            color: #333;
+            margin-bottom: 25px;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .modal-step p {
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        .input-group label {
+            display: block;
+            color: #555;
+            margin-bottom: 10px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .input-group input::placeholder {
+            color: #999;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .modal-buttons .btn {
+            flex: 1;
+            min-width: auto;
+        }
+
+        .success-message {
+            color: #4CAF50;
+            font-size: 14px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+
+        .error-message {
+            color: #f44336;
+            font-size: 14px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .section {
+                padding: 20px;
+            }
+            
+            .status-section {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .btn {
+                width: 100%;
+                min-width: auto;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .modal-content {
+                padding: 30px 20px;
+                margin: 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 22px;
+            }
+            
+            .header p {
+                font-size: 14px;
+            }
+            
+            .content {
+                padding: 15px;
+            }
+            
+            .section h3 {
+                font-size: 18px;
+            }
+            
+            .log-section {
+                height: 250px;
+                font-size: 13px;
+            }
+        }
+
+        /* Notification Badge */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            z-index: 1001;
+            display: none;
+            animation: slideInRight 0.3s ease;
+        }
+
+        .notification.success {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        }
+
+        .notification.error {
+            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+        }
+
+        .notification.warning {
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 14px;
+            border-top: 1px solid #eee;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 20px;
+        }
+
+        .footer-links a {
+            color: #667eea;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .footer {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .footer-links {
+                justify-content: center;
+            }
+        }
+
+        /* Signal Preview Styling */
+        .signal-line {
+            padding: 2px 0;
+        }
+
+        .signal-emoji {
+            margin-right: 10px;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            margin: 20px 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 3px;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltip-text {
+            visibility: hidden;
+            width: 200px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+            font-weight: normal;
+            line-height: 1.4;
+        }
+
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .tooltip .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Notification Container -->
+    <div id="notification" class="notification"></div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>
+                <i class="fas fa-paper-plane"></i>
+                Telegram Auto Forwarder
+            </h1>
+            <p>Forward trading signals from source to target group automatically in real-time</p>
+            <div class="render-badge">
+                <i class="fas fa-server"></i> Hosted on Render.com
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="content">
+            <!-- Configuration Section -->
+            <div class="section">
+                <h3><i class="fas fa-cogs"></i> Configuration</h3>
+                <p><strong>Source Group:</strong> https://t.me/ceeVIPpolycarp22334455</p>
+                <p><strong>Target Group:</strong> https://t.me/+JyAcm_mp4GplN2Q5</p>
+                <p><strong>Poster Username:</strong> @policeesupport</p>
+                
+                <div class="api-info">
+                    <h4><i class="fas fa-key"></i> API Configuration</h4>
+                    <p>
+                        <span>User ID:</span>
+                        <span id="api-id">38615833</span>
+                    </p>
+                    <p>
+                        <span>App API Hash:</span>
+                        <span id="api-hash">••••••••719a</span>
+                    </p>
+                    <div class="success-message">
+                        <i class="fas fa-shield-alt"></i>
+                        API credentials are securely stored in environment variables
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Signal Pattern Section -->
+            <div class="section">
+                <h3><i class="fas fa-bell"></i> Signal Pattern</h3>
+                <p>Messages containing "🔔 NEW SIGNAL!" with the specific trading format will be forwarded automatically.</p>
+                <div class="signal-preview">
+                    <div class="signal-line"><span class="signal-emoji">🔔</span> NEW SIGNAL!</div>
+                    <div class="signal-line"><span class="signal-emoji">🎫</span> Trade: 🇪🇺 EUR/CAD 🇨🇦 (OTC)</div>
+                    <div class="signal-line"><span class="signal-emoji">⏳</span> Timer: 5 minutes</div>
+                    <div class="signal-line"><span class="signal-emoji">➡️</span> Entry: 7:12 PM</div>
+                    <div class="signal-line"><span class="signal-emoji">📈</span> Direction: SELL 🟥</div>
+                    <br>
+                    <div class="signal-line"><span class="signal-emoji">↪️</span> Martingale Levels:</div>
+                    <div class="signal-line">&nbsp;&nbsp;Level 1 → 7:17 PM</div>
+                    <div class="signal-line">&nbsp;&nbsp;Level 2 → 7:22 PM</div>
+                    <div class="signal-line">&nbsp;&nbsp;Level 3 → 7:27 PM</div>
+                </div>
+            </div>
+            
+            <!-- Status Cards -->
+            <div class="status-section">
+                <div class="status-card offline" id="connection-status">
+                    <h4>
+                        <span class="status-indicator"></span>
+                        Connection Status
+                    </h4>
+                    <p id="status-text">Not Connected</p>
+                </div>
+                
+                <div class="status-card" id="forwarded-count">
+                    <h4><i class="fas fa-share-square"></i> Forwarded Messages</h4>
+                    <p id="count-text">0</p>
+                </div>
+                
+                <div class="status-card" id="last-forwarded">
+                    <h4><i class="fas fa-clock"></i> Last Forwarded</h4>
+                    <p id="last-time">Never</p>
+                </div>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="progress-container" id="progress-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            
+            <!-- Control Buttons -->
+            <div class="controls">
+                <button class="btn" id="start-btn" onclick="startForwarding()">
+                    <i class="fas fa-play"></i> Start Forwarding
+                </button>
+                <button class="btn btn-stop" id="stop-btn" onclick="stopForwarding()" disabled>
+                    <i class="fas fa-stop"></i> Stop Forwarding
+                </button>
+                <button class="btn btn-test" onclick="testForwarding()">
+                    <i class="fas fa-vial"></i> Test Forward
+                </button>
+                <button class="btn" onclick="showOTPModal()">
+                    <i class="fas fa-sign-in-alt"></i> Login with OTP
+                </button>
+            </div>
+            
+            <!-- Activity Log Section -->
+            <div class="section">
+                <h3><i class="fas fa-terminal"></i> Activity Log</h3>
+                <div class="log-section" id="log-container">
+                    <div class="log-entry">
+                        <span class="log-time">[00:00:00]</span>
+                        <span class="log-message">System initialized. Ready to start.</span>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+                    <button class="btn" onclick="clearLogs()" style="padding: 8px 16px; font-size: 14px;">
+                        <i class="fas fa-trash"></i> Clear Logs
+                    </button>
+                    <button class="btn" onclick="exportLogs()" style="padding: 8px 16px; font-size: 14px;">
+                        <i class="fas fa-download"></i> Export Logs
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <div>© 2024 Telegram Auto Forwarder</div>
+            <div class="footer-links">
+                <a href="#" onclick="showHelp()"><i class="fas fa-question-circle"></i> Help</a>
+                <a href="#" onclick="showAbout()"><i class="fas fa-info-circle"></i> About</a>
+                <a href="#" onclick="refreshPage()"><i class="fas fa-sync-alt"></i> Refresh</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- OTP Modal -->
+    <div id="otp-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close" onclick="hideOTPModal()">&times;</button>
+            
+            <!-- Phone Step -->
+            <div id="phone-step" class="modal-step active">
+                <h3><i class="fas fa-mobile-alt"></i> Telegram Login</h3>
+                <p>Enter your Telegram phone number with country code to receive OTP:</p>
+                <div class="input-group">
+                    <label for="phone-number">Phone Number</label>
+                    <input type="tel" id="phone-number" placeholder="+1234567890" autocomplete="off">
+                </div>
+                <div class="modal-buttons">
+                    <button class="btn" onclick="sendOTP()">
+                        <i class="fas fa-paper-plane"></i> Send OTP
+                    </button>
+                    <button class="btn btn-stop" onclick="hideOTPModal()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+            
+            <!-- OTP Step -->
+            <div id="otp-step" class="modal-step">
+                <h3><i class="fas fa-shield-alt"></i> Enter OTP</h3>
+                <p>Enter the 6-digit code sent to your Telegram app:</p>
+                <div class="input-group">
+                    <label for="otp-code">Verification Code</label>
+                    <input type="text" id="otp-code" placeholder="123456" maxlength="6" autocomplete="off" inputmode="numeric">
+                </div>
+                <div id="otp-timer" class="success-message" style="display: none;">
+                    <i class="fas fa-clock"></i>
+                    <span id="timer-text">Resend OTP in 60 seconds</span>
+                </div>
+                <div class="modal-buttons">
+                    <button class="btn" onclick="verifyOTP()">
+                        <i class="fas fa-check"></i> Verify OTP
+                    </button>
+                    <button class="btn btn-stop" onclick="resendOTP()">
+                        <i class="fas fa-redo"></i> Resend OTP
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Password Step -->
+            <div id="password-step" class="modal-step">
+                <h3><i class="fas fa-lock"></i> Two-Factor Authentication</h3>
+                <p>Enter your Telegram 2FA password to continue:</p>
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="Enter your password" autocomplete="off">
+                </div>
+                <div class="modal-buttons">
+                    <button class="btn" onclick="verifyPassword()">
+                        <i class="fas fa-unlock"></i> Verify Password
+                    </button>
+                    <button class="btn btn-stop" onclick="hideOTPModal()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Loading Step -->
+            <div id="loading-step" class="modal-step">
+                <h3><i class="fas fa-spinner fa-spin"></i> Processing</h3>
+                <p id="loading-message">Connecting to Telegram...</p>
+                <div style="text-align: center; margin-top: 30px;">
+                    <div class="loading" style="width: 40px; height: 40px; margin: 0 auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // Global Variables
+        let isForwarding = false;
+        let forwardedCount = 0;
+        let connectionInterval;
+        let statusInterval;
+        let lastForwardedTime = null;
+        let otpTimer = null;
+        let otpTimeLeft = 60;
+        let apiBaseUrl = window.location.origin;
+        let sessionActive = false;
+
+        // DOM Elements
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const statusText = document.getElementById('status-text');
+        const countText = document.getElementById('count-text');
+        const lastTime = document.getElementById('last-time');
+        const connectionStatus = document.getElementById('connection-status');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkConfiguration();
+            loadSavedData();
+            startStatusPolling();
+            showNotification('System initialized successfully!', 'success');
+        });
+
+        // Check API Configuration
+        async function checkConfiguration() {
+            try {
+                const response = await fetch('/api/config');
+                if (response.ok) {
+                    const config = await response.json();
+                    document.getElementById('api-id').textContent = config.apiId || '38615833';
+                    document.getElementById('api-hash').textContent = config.apiHash ? 
+                        '••••••••' + config.apiHash.slice(-4) : '••••••••719a';
+                    addLog('Configuration loaded successfully', 'success');
+                }
+            } catch (error) {
+                addLog('Using default configuration', 'warning');
+            }
+        }
+
+        // Load saved data from localStorage
+        function loadSavedData() {
+            const savedCount = localStorage.getItem('forwardedCount');
+            const savedLastTime = localStorage.getItem('lastForwardedTime');
+            const savedSession = localStorage.getItem('telegramSession');
+            
+            if (savedCount) {
+                forwardedCount = parseInt(savedCount);
+                updateCount();
+            }
+            
+            if (savedLastTime) {
+                lastForwardedTime = new Date(savedLastTime);
+                updateLastForwarded();
+            }
+            
+            if (savedSession) {
+                sessionActive = true;
+                updateConnectionStatus(true);
+                addLog('Previous session found', 'success');
+            }
+        }
+
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem('forwardedCount', forwardedCount);
+            if (lastForwardedTime) {
+                localStorage.setItem('lastForwardedTime', lastForwardedTime.toISOString());
+            }
+        }
+
+        // Add log entry
+        function addLog(message, type = 'info') {
+            const logContainer = document.getElementById('log-container');
+            const time = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            
+            let messageClass = 'log-message';
+            switch(type) {
+                case 'error': messageClass = 'log-error'; break;
+                case 'success': messageClass = 'log-success'; break;
+                case 'warning': messageClass = 'log-warning'; break;
+            }
+            
+            logEntry.innerHTML = `
+                <span class="log-time">[${time}]</span>
+                <span class="${messageClass}">${message}</span>
+            `;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Auto-clean old logs (keep last 100)
+            const logs = logContainer.querySelectorAll('.log-entry');
+            if (logs.length > 100) {
+                for (let i = 0; i < logs.length - 100; i++) {
+                    logs[i].remove();
+                }
+            }
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            if (connected) {
+                connectionStatus.className = 'status-card online';
+                statusText.textContent = 'Connected & Monitoring';
+            } else {
+                connectionStatus.className = 'status-card offline';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        // Update message count
+        function updateCount() {
+            countText.textContent = forwardedCount;
+            saveData();
+        }
+
+        // Update last forwarded time
+        function updateLastForwarded() {
+            if (lastForwardedTime) {
+                const now = new Date();
+                const diffMs = now - lastForwardedTime;
+                const diffMins = Math.floor(diffMs / 60000);
+                
+                if (diffMins < 1) {
+                    lastTime.textContent = 'Just now';
+                } else if (diffMins < 60) {
+                    lastTime.textContent = `${diffMins} minutes ago`;
+                } else {
+                    lastTime.textContent = lastForwardedTime.toLocaleTimeString();
+                }
+            } else {
+                lastTime.textContent = 'Never';
+            }
+            saveData();
+        }
+
+        // Show notification
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        // Start forwarding service
+        async function startForwarding() {
+            if (isForwarding) return;
+            
+            try {
+                showProgress();
+                addLog('Starting auto-forwarding service...', 'info');
+                
+                const response = await fetch('/api/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    isForwarding = true;
+                    startBtn.disabled = true;
+                    stopBtn.disabled = false;
+                    
+                    updateConnectionStatus(true);
+                    addLog('Forwarding service started successfully', 'success');
+                    addLog('Monitoring @policeesupport in source group...', 'info');
+                    
+                    showNotification('Forwarding service started!', 'success');
+                    
+                    // Store auth token if provided
+                    if (data.token) {
+                        localStorage.setItem('authToken', data.token);
+                    }
+                } else {
+                    addLog(`Error: ${data.error}`, 'error');
+                    if (data.error.includes('session') || data.error.includes('login') || data.error.includes('auth')) {
+                        showNotification('Authentication required', 'warning');
+                        showOTPModal();
+                    } else {
+                        showNotification(data.error, 'error');
+                    }
+                }
+            } catch (error) {
+                addLog(`Connection error: ${error.message}`, 'error');
+                showNotification('Failed to start service', 'error');
+            } finally {
+                hideProgress();
+            }
+        }
+
+        // Stop forwarding service
+        async function stopForwarding() {
+            if (!isForwarding) return;
+            
+            try {
+                showProgress();
+                addLog('Stopping auto-forwarding service...', 'info');
+                
+                const response = await fetch('/api/stop', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    isForwarding = false;
+                    startBtn.disabled = false;
+                    stopBtn.disabled = true;
+                    
+                    updateConnectionStatus(false);
+                    addLog('Forwarding service stopped', 'success');
+                    showNotification('Forwarding service stopped', 'warning');
+                }
+            } catch (error) {
+                addLog(`Error stopping service: ${error.message}`, 'error');
+                showNotification('Failed to stop service', 'error');
+            } finally {
+                hideProgress();
+            }
+        }
+
+        // Test forwarding
+        async function testForwarding() {
+            try {
+                showProgress();
+                addLog('Testing forwarding functionality...', 'info');
+                
+                const response = await fetch('/api/test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    forwardedCount++;
+                    lastForwardedTime = new Date();
+                    
+                    updateCount();
+                    updateLastForwarded();
+                    addLog('Test: Forwarded test message successfully', 'success');
+                    showNotification('Test message forwarded successfully!', 'success');
+                } else {
+                    addLog(`Test failed: ${data.message}`, 'error');
+                    showNotification(data.message, 'error');
+                }
+            } catch (error) {
+                addLog(`Test error: ${error.message}`, 'error');
+                showNotification('Test failed: ' + error.message, 'error');
+            } finally {
+                hideProgress();
+            }
+        }
+
+        // Check status periodically
+        function startStatusPolling() {
+            statusInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/status');
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        forwardedCount = data.forwardedCount || forwardedCount;
+                        updateCount();
+                        
+                        if (data.lastForwarded) {
+                            lastForwardedTime = new Date(data.lastForwarded);
+                            updateLastForwarded();
+                        }
+                        
+                        updateConnectionStatus(data.isRunning);
+                        
+                        if (data.isRunning && !isForwarding) {
+                            isForwarding = true;
+                            startBtn.disabled = true;
+                            stopBtn.disabled = false;
+                        } else if (!data.isRunning && isForwarding) {
+                            isForwarding = false;
+                            startBtn.disabled = false;
+                            stopBtn.disabled = true;
+                        }
+                    }
+                } catch (error) {
+                    console.log('Status check failed:', error);
+                }
+            }, 10000); // Check every 10 seconds
+        }
+
+        // OTP Modal Functions
+        function showOTPModal() {
+            document.getElementById('otp-modal').style.display = 'flex';
+            showStep('phone-step');
+        }
+
+        function hideOTPModal() {
+            document.getElementById('otp-modal').style.display = 'none';
+            resetOTPForm();
+        }
+
+        function showStep(stepId) {
+            document.querySelectorAll('.modal-step').forEach(step => {
+                step.classList.remove('active');
+            });
+            document.getElementById(stepId).classList.add('active');
+        }
+
+        function showLoading(message) {
+            document.getElementById('loading-message').textContent = message;
+            showStep('loading-step');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-step').classList.remove('active');
+        }
+
+        // Send OTP
+        async function sendOTP() {
+            const phoneNumber = document.getElementById('phone-number').value.trim();
+            
+            if (!phoneNumber) {
+                showNotification('Please enter a phone number', 'error');
+                return;
+            }
+            
+            if (!phoneNumber.startsWith('+')) {
+                showNotification('Please include country code (e.g., +1234567890)', 'error');
+                return;
+            }
+            
+            showLoading('Sending OTP to your Telegram...');
+            addLog(`Sending OTP to ${phoneNumber}...`, 'info');
+            
+            try {
+                const response = await fetch('/api/send-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ phoneNumber })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    hideLoading();
+                    showStep('otp-step');
+                    startOTPTimer();
+                    addLog('OTP sent successfully. Check your Telegram app.', 'success');
+                    showNotification('OTP sent successfully!', 'success');
+                } else {
+                    hideLoading();
+                    showStep('phone-step');
+                    addLog(`OTP error: ${data.error}`, 'error');
+                    showNotification(data.error, 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                showStep('phone-step');
+                addLog(`OTP error: ${error.message}`, 'error');
+                showNotification('Failed to send OTP', 'error');
+            }
+        }
+
+        // Start OTP timer
+        function startOTPTimer() {
+            otpTimeLeft = 60;
+            const timerElement = document.getElementById('otp-timer');
+            const timerText = document.getElementById('timer-text');
+            
+            timerElement.style.display = 'flex';
+            
+            otpTimer = setInterval(() => {
+                otpTimeLeft--;
+                timerText.textContent = `Resend OTP in ${otpTimeLeft} seconds`;
+                
+                if (otpTimeLeft <= 0) {
+                    clearInterval(otpTimer);
+                    timerElement.style.display = 'none';
+                }
+            }, 1000);
+        }
+
+        // Resend OTP
+        function resendOTP() {
+            if (otpTimeLeft > 0) {
+                showNotification(`Please wait ${otpTimeLeft} seconds before resending`, 'warning');
+                return;
+            }
+            
+            const phoneNumber = document.getElementById('phone-number').value.trim();
+            if (!phoneNumber) {
+                showStep('phone-step');
+                return;
+            }
+            
+            sendOTP();
+        }
+
+        // Verify OTP
+        async function verifyOTP() {
+            const otpCode = document.getElementById('otp-code').value.trim();
+            
+            if (!otpCode || otpCode.length < 5) {
+                showNotification('Please enter a valid OTP (6 digits)', 'error');
+                return;
+            }
+            
+            showLoading('Verifying OTP...');
+            addLog('Verifying OTP...', 'info');
+            
+            try {
+                const response = await fetch('/api/verify-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ otpCode })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.requiresPassword) {
+                        hideLoading();
+                        showStep('password-step');
+                        addLog('OTP verified. Enter your 2FA password.', 'success');
+                        showNotification('OTP verified! Enter 2FA password.', 'success');
+                    } else {
+                        // Login successful
+                        hideLoading();
+                        hideOTPModal();
+                        addLog('Login successful! You can now start forwarding.', 'success');
+                        showNotification('Login successful!', 'success');
+                        
+                        // Store session if provided
+                        if (data.session) {
+                            localStorage.setItem('telegramSession', data.session);
+                            sessionActive = true;
+                        }
+                        
+                        // Auto-start forwarding
+                        setTimeout(() => startForwarding(), 1000);
+                    }
+                } else {
+                    hideLoading();
+                    showStep('otp-step');
+                    addLog(`OTP verification failed: ${data.error}`, 'error');
+                    showNotification(data.error, 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                showStep('otp-step');
+                addLog(`OTP verification error: ${error.message}`, 'error');
+                showNotification('Failed to verify OTP', 'error');
+            }
+        }
+
+        // Verify Password
+        async function verifyPassword() {
+            const password = document.getElementById('password').value;
+            
+            if (!password) {
+                showNotification('Please enter your password', 'error');
+                return;
+            }
+            
+            showLoading('Verifying password...');
+            addLog('Verifying 2FA password...', 'info');
+            
+            try {
+                const response = await fetch('/api/verify-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    hideLoading();
+                    hideOTPModal();
+                    addLog('Login successful! You can now start forwarding.', 'success');
+                    showNotification('Login successful!', 'success');
+                    
+                    // Store session if provided
+                    if (data.session) {
+                        localStorage.setItem('telegramSession', data.session);
+                        sessionActive = true;
+                    }
+                    
+                    // Auto-start forwarding
+                    setTimeout(() => startForwarding(), 1000);
+                } else {
+                    hideLoading();
+                    showStep('password-step');
+                    addLog(`Password verification failed: ${data.error}`, 'error');
+                    showNotification(data.error, 'error');
+                }
+            } catch (error) {
+                hideLoading();
+                showStep('password-step');
+                addLog(`Password verification error: ${error.message}`, 'error');
+                showNotification('Failed to verify password', 'error');
+            }
+        }
+
+        // Reset OTP form
+        function resetOTPForm() {
+            document.getElementById('phone-number').value = '';
+            document.getElementById('otp-code').value = '';
+            document.getElementById('password').value = '';
+            
+            if (otpTimer) {
+                clearInterval(otpTimer);
+                otpTimer = null;
+            }
+            
+            document.getElementById('otp-timer').style.display = 'none';
+        }
+
+        // Progress bar functions
+        function showProgress() {
+            progressContainer.style.display = 'block';
+            let width = 0;
+            const interval = setInterval(() => {
+                if (width >= 90) {
+                    clearInterval(interval);
+                } else {
+                    width += 10;
+                    progressBar.style.width = width + '%';
+                }
+            }, 100);
+        }
+
+        function hideProgress() {
+            progressBar.style.width = '100%';
+            setTimeout(() => {
+                progressBar.style.width = '0%';
+                progressContainer.style.display = 'none';
+            }, 500);
+        }
+
+        // Utility functions
+        function clearLogs() {
+            const logContainer = document.getElementById('log-container');
+            logContainer.innerHTML = '';
+            addLog('Logs cleared', 'warning');
+            showNotification('Logs cleared', 'warning');
+        }
+
+        function exportLogs() {
+            const logContainer = document.getElementById('log-container');
+            const logs = logContainer.innerText;
+            const blob = new Blob([logs], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `telegram-forwarder-logs-${new Date().toISOString().slice(0,10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            addLog('Logs exported successfully', 'success');
+            showNotification('Logs exported!', 'success');
+        }
+
+        function showHelp() {
+            const helpMessage = `
+Telegram Auto Forwarder - Help Guide
+
+1. Login with OTP:
+   - Click "Login with OTP" button
+   - Enter your Telegram phone number with country code
+   - Enter the OTP sent to your Telegram app
+   - If 2FA is enabled, enter your password
+
+2. Start Forwarding:
+   - Click "Start Forwarding" after successful login
+   - The system will automatically monitor for signals
+
+3. Signal Format:
+   - Only messages from @policeesupport are forwarded
+   - Must contain "🔔 NEW SIGNAL!" text
+   - Must match the exact trading format shown
+
+4. Status Indicators:
+   - Green: Connected and monitoring
+   - Red: Disconnected or authentication needed
+
+5. Troubleshooting:
+   - If OTP not received, check phone number format
+   - Ensure you're a member of both Telegram groups
+   - Check Render.com logs for detailed errors
+            `;
+            
+            alert(helpMessage);
+            addLog('Help guide displayed', 'info');
+        }
+
+        function showAbout() {
+            const aboutMessage = `
+Telegram Auto Forwarder v1.0
+
+A web-based solution for automatically forwarding
+trading signals from one Telegram group to another.
+
+Features:
+- Real-time signal monitoring
+- Secure OTP authentication
+- Web-based control panel
+- Activity logging
+- Test functionality
+
+Deployed on Render.com
+API: Telegram MTProto
+            `;
+            
+            alert(aboutMessage);
+            addLog('About information displayed', 'info');
+        }
+
+        function refreshPage() {
+            location.reload();
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (statusInterval) clearInterval(statusInterval);
+            if (connectionInterval) clearInterval(connectionInterval);
+            if (otpTimer) clearInterval(otpTimer);
+        });
+    </script>
+</body>
+</html>
