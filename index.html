@@ -1316,198 +1316,172 @@
             document.getElementById('loading-step').classList.remove('active');
         }
 
-        // Send OTP
-        async function sendOTP() {
-            const phoneNumber = document.getElementById('phone-number').value.trim();
+        // Update sendOTP function:
+async function sendOTP() {
+    const phoneNumber = document.getElementById('phone-number').value.trim();
+    
+    if (!phoneNumber) {
+        showNotification('Please enter a phone number', 'error');
+        return;
+    }
+    
+    if (!phoneNumber.startsWith('+')) {
+        showNotification('Please include country code (e.g., +1234567890)', 'error');
+        return;
+    }
+    
+    showLoading('Sending OTP to your Telegram...');
+    addLog(`Sending OTP to ${phoneNumber}...`, 'info');
+    
+    try {
+        const response = await fetch('/api/send-otp', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ phoneNumber })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Store session ID
+            window.otpSessionId = data.sessionId;
             
-            if (!phoneNumber) {
-                showNotification('Please enter a phone number', 'error');
-                return;
-            }
-            
-            if (!phoneNumber.startsWith('+')) {
-                showNotification('Please include country code (e.g., +1234567890)', 'error');
-                return;
-            }
-            
-            showLoading('Sending OTP to your Telegram...');
-            addLog(`Sending OTP to ${phoneNumber}...`, 'info');
-            
-            try {
-                const response = await fetch('/api/send-otp', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ phoneNumber })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    hideLoading();
-                    showStep('otp-step');
-                    startOTPTimer();
-                    addLog('OTP sent successfully. Check your Telegram app.', 'success');
-                    showNotification('OTP sent successfully!', 'success');
-                } else {
-                    hideLoading();
-                    showStep('phone-step');
-                    addLog(`OTP error: ${data.error}`, 'error');
-                    showNotification(data.error, 'error');
-                }
-            } catch (error) {
-                hideLoading();
-                showStep('phone-step');
-                addLog(`OTP error: ${error.message}`, 'error');
-                showNotification('Failed to send OTP', 'error');
-            }
+            hideLoading();
+            showStep('otp-step');
+            startOTPTimer();
+            addLog('OTP request sent. Check your Telegram app.', 'success');
+            showNotification('OTP sent successfully!', 'success');
+        } else {
+            hideLoading();
+            showStep('phone-step');
+            addLog(`OTP error: ${data.error}`, 'error');
+            showNotification(data.error, 'error');
         }
+    } catch (error) {
+        hideLoading();
+        showStep('phone-step');
+        addLog(`OTP error: ${error.message}`, 'error');
+        showNotification('Failed to send OTP', 'error');
+    }
+}
 
-        // Start OTP timer
-        function startOTPTimer() {
-            otpTimeLeft = 60;
-            const timerElement = document.getElementById('otp-timer');
-            const timerText = document.getElementById('timer-text');
-            
-            timerElement.style.display = 'flex';
-            
-            otpTimer = setInterval(() => {
-                otpTimeLeft--;
-                timerText.textContent = `Resend OTP in ${otpTimeLeft} seconds`;
-                
-                if (otpTimeLeft <= 0) {
-                    clearInterval(otpTimer);
-                    timerElement.style.display = 'none';
-                }
-            }, 1000);
-        }
-
-        // Resend OTP
-        function resendOTP() {
-            if (otpTimeLeft > 0) {
-                showNotification(`Please wait ${otpTimeLeft} seconds before resending`, 'warning');
-                return;
-            }
-            
-            const phoneNumber = document.getElementById('phone-number').value.trim();
-            if (!phoneNumber) {
-                showStep('phone-step');
-                return;
-            }
-            
-            sendOTP();
-        }
-
-        // Verify OTP
-        async function verifyOTP() {
-            const otpCode = document.getElementById('otp-code').value.trim();
-            
-            if (!otpCode || otpCode.length < 5) {
-                showNotification('Please enter a valid OTP (6 digits)', 'error');
-                return;
-            }
-            
-            showLoading('Verifying OTP...');
-            addLog('Verifying OTP...', 'info');
-            
-            try {
-                const response = await fetch('/api/verify-otp', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ otpCode })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    if (data.requiresPassword) {
-                        hideLoading();
-                        showStep('password-step');
-                        addLog('OTP verified. Enter your 2FA password.', 'success');
-                        showNotification('OTP verified! Enter 2FA password.', 'success');
-                    } else {
-                        // Login successful
-                        hideLoading();
-                        hideOTPModal();
-                        addLog('Login successful! You can now start forwarding.', 'success');
-                        showNotification('Login successful!', 'success');
-                        
-                        // Store session if provided
-                        if (data.session) {
-                            localStorage.setItem('telegramSession', data.session);
-                            sessionActive = true;
-                        }
-                        
-                        // Auto-start forwarding
-                        setTimeout(() => startForwarding(), 1000);
-                    }
-                } else {
-                    hideLoading();
-                    showStep('otp-step');
-                    addLog(`OTP verification failed: ${data.error}`, 'error');
-                    showNotification(data.error, 'error');
-                }
-            } catch (error) {
-                hideLoading();
-                showStep('otp-step');
-                addLog(`OTP verification error: ${error.message}`, 'error');
-                showNotification('Failed to verify OTP', 'error');
-            }
-        }
-
-        // Verify Password
-        async function verifyPassword() {
-            const password = document.getElementById('password').value;
-            
-            if (!password) {
-                showNotification('Please enter your password', 'error');
-                return;
-            }
-            
-            showLoading('Verifying password...');
-            addLog('Verifying 2FA password...', 'info');
-            
-            try {
-                const response = await fetch('/api/verify-password', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ password })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    hideLoading();
-                    hideOTPModal();
-                    addLog('Login successful! You can now start forwarding.', 'success');
-                    showNotification('Login successful!', 'success');
-                    
-                    // Store session if provided
-                    if (data.session) {
-                        localStorage.setItem('telegramSession', data.session);
-                        sessionActive = true;
-                    }
-                    
-                    // Auto-start forwarding
-                    setTimeout(() => startForwarding(), 1000);
-                } else {
-                    hideLoading();
-                    showStep('password-step');
-                    addLog(`Password verification failed: ${data.error}`, 'error');
-                    showNotification(data.error, 'error');
-                }
-            } catch (error) {
+// Update verifyOTP function:
+async function verifyOTP() {
+    const otpCode = document.getElementById('otp-code').value.trim();
+    
+    if (!otpCode || otpCode.length < 5) {
+        showNotification('Please enter a valid OTP (6 digits)', 'error');
+        return;
+    }
+    
+    if (!window.otpSessionId) {
+        showNotification('Session expired. Please start over.', 'error');
+        showStep('phone-step');
+        return;
+    }
+    
+    showLoading('Verifying OTP...');
+    addLog('Verifying OTP...', 'info');
+    
+    try {
+        const response = await fetch('/api/verify-otp', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                otpCode: otpCode,
+                sessionId: window.otpSessionId 
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            if (data.requiresPassword) {
                 hideLoading();
                 showStep('password-step');
-                addLog(`Password verification error: ${error.message}`, 'error');
-                showNotification('Failed to verify password', 'error');
+                addLog('OTP verified. Enter your 2FA password.', 'success');
+                showNotification('OTP verified! Enter 2FA password.', 'success');
+            } else {
+                // Login successful
+                hideLoading();
+                hideOTPModal();
+                addLog('Login successful! You can now start forwarding.', 'success');
+                showNotification('Login successful!', 'success');
+                
+                // Auto-start forwarding
+                setTimeout(() => startForwarding(), 1000);
             }
+        } else {
+            hideLoading();
+            showStep('otp-step');
+            addLog(`OTP verification failed: ${data.error}`, 'error');
+            showNotification(data.error, 'error');
         }
+    } catch (error) {
+        hideLoading();
+        showStep('otp-step');
+        addLog(`OTP verification error: ${error.message}`, 'error');
+        showNotification('Failed to verify OTP', 'error');
+    }
+}
+
+// Update verifyPassword function:
+async function verifyPassword() {
+    const password = document.getElementById('password').value;
+    
+    if (!password) {
+        showNotification('Please enter your password', 'error');
+        return;
+    }
+    
+    if (!window.otpSessionId) {
+        showNotification('Session expired. Please start over.', 'error');
+        showStep('phone-step');
+        return;
+    }
+    
+    showLoading('Verifying password...');
+    addLog('Verifying 2FA password...', 'info');
+    
+    try {
+        const response = await fetch('/api/verify-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                password: password,
+                sessionId: window.otpSessionId 
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            hideLoading();
+            hideOTPModal();
+            addLog('Login successful! You can now start forwarding.', 'success');
+            showNotification('Login successful!', 'success');
+            
+            // Auto-start forwarding
+            setTimeout(() => startForwarding(), 1000);
+        } else {
+            hideLoading();
+            showStep('password-step');
+            addLog(`Password verification failed: ${data.error}`, 'error');
+            showNotification(data.error, 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showStep('password-step');
+        addLog(`Password verification error: ${error.message}`, 'error');
+        showNotification('Failed to verify password', 'error');
+    }
+}
 
         // Reset OTP form
         function resetOTPForm() {
